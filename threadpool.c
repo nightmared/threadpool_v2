@@ -8,31 +8,23 @@ struct thread thread_new() {
     struct thread th;
     th.socket = sockets[0];
     th.remote_socket = sockets[1];
+    th.state = ThreadInitState;
     th.fd = 0;
 
     return th;
 }
 
 void thread_run(struct thread *th, void *(*fun) (void *)) {
-    if (pthread_create(&th->fd, NULL, fun, &th))
+    if (pthread_create(&th->fd, NULL, fun, th))
         ERR("pthread_create() failed")
-}
-
-void thread_send_msg(struct thread *th, struct query* q) {
-    if (send(th->socket, q, sizeof(struct query), 0) == 0)
-        ERR("send failed")
-}
-
-void thread_recv_msg(struct thread *th, struct answer* r) {
-    if (recv(th->socket, r, sizeof(struct answer), 0) == 0)
-        ERR("send failed")
+    th->state = ThreadRunning;
 }
 
 void thread_stop(struct thread *th) {
     struct query q;
-    q.state = RunTask;
+    q.state = Stop;
     q.task = NULL;
-    thread_send_msg(th, &q);
+    send_query(th->socket, &q);
 }
 
 void thread_destroy(struct thread *p) {
@@ -40,6 +32,32 @@ void thread_destroy(struct thread *p) {
     close(p->socket);
     close(p->remote_socket);
 }
+
+
+void send_query(int sock, struct query* q) {
+    int len = send(sock, q, sizeof(struct query), 0);
+    if (len == -1 || len < sizeof(struct query))
+        ERR("send failed or message too short")
+}
+
+void recv_query(int sock, struct query* q) {
+    int len = recv(sock, q, sizeof(struct query), 0);
+    if (len == -1 || len < sizeof(struct query))
+        ERR("send failed or message too short")
+}
+
+void send_answer(int sock, struct answer* q) {
+    int len = send(sock, q, sizeof(struct answer), 0);
+    if (len == -1 || len < sizeof(struct answer))
+        ERR("send failed or message too short")
+}
+
+void recv_answer(int sock, struct answer* q) {
+    int len = recv(sock, q, sizeof(struct answer), 0);
+    if (len == -1 || len < sizeof(struct answer))
+        ERR("send failed or message too short")
+}
+
 
 
 struct thread_list thread_list_new(uint32_t len, void *(*fun) (void *)) {
@@ -76,7 +94,7 @@ int thread_list_create_epoll_queue(struct thread_list *p) {
     for (uint32_t i = 0; i < p->len; i++) {
         struct epoll_event ev;
         epoll_data_t val;
-        val.u32 = i;
+        val.ptr = &p->threads[i];
         ev.data = val;
         ev.events = EPOLLIN;
         int res = epoll_ctl(epfd, EPOLL_CTL_ADD, p->threads[i].socket, &ev);
@@ -85,6 +103,12 @@ int thread_list_create_epoll_queue(struct thread_list *p) {
     }
 
     return epfd;
+}
+
+void thread_list_stop(struct thread_list *p) {
+    for (uint32_t i = 0; i < p->len; i++) {
+        thread_stop(&p->threads[i]);
+    }
 }
 
 void thread_list_destroy(struct thread_list *p) {
