@@ -1,29 +1,20 @@
 #include "threadpool.h"
-#include "webserv.h"
+#include <signal.h>
 
 #define NUMBER_THREADS 4
 
-void* handler(void *val) {
-    struct thread *th = (struct thread*)val;
-    while(1) {
-        struct query msg;
-        recv_query(th->remote_socket, &msg);
-        if (msg.state == Stop) {
-            enum Answer ans = Stopped;
-            send_answer(th->remote_socket, &ans);
-            return 0;
-        }
-        if (msg.state == RunTask) {
-            webserv(msg.task);
-            enum Answer ans = TaskResult;
-            send_answer(th->remote_socket, &ans);
-        }
-    }
-    return 0;
+static int web_socket, epfd;
+static struct thread_list threads;
+
+void cleanup_handler(int _) {
+    thread_list_destroy(&threads);
+    close(epfd);
+    close(web_socket);
+    exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char* argv[]) {
-    int web_socket = socket(AF_INET, SOCK_STREAM, 0);
+    web_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (web_socket == 0)
         ERR("Couldn't allocate a socket")
 
@@ -37,8 +28,13 @@ int main(int argc, char* argv[]) {
     if (listen(web_socket, 4096))
         ERR("listen failed")
 
-    struct thread_list threads = thread_list_new(NUMBER_THREADS, &handler);
-    int epfd = thread_list_create_epoll_queue(&threads);
+    threads = thread_list_new(NUMBER_THREADS, threadpool_handler);
+    epfd = thread_list_create_epoll_queue(&threads);
+
+    // close the socket in the event of interruption from user
+    struct sigaction sig;
+    sig.sa_handler = cleanup_handler;
+    sigaction(SIGINT, &sig, NULL);
 
     struct epoll_event ev;
     epoll_data_t val;
@@ -80,9 +76,5 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    thread_list_destroy(&threads);
-    close(epfd);
-
-    close(web_socket);
-    return EXIT_SUCCESS;
+    cleanup_handler(0);
 }

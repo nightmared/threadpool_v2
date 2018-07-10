@@ -30,7 +30,7 @@ void thread_stop(struct thread *th) {
 }
 
 void thread_destroy(struct thread *th) {
-    pthread_cancel(th->fd);
+    pthread_kill(th->fd, SIGUSR1);
     close(th->socket);
     close(th->remote_socket);
     th->available = 0;
@@ -113,32 +113,6 @@ int thread_list_create_epoll_queue(struct thread_list *p) {
     return epfd;
 }
 
-void* thread_list_wait_queue_pop(struct thread_list *p) {
-    if (p->queue == NULL)
-        ERR("pop called on a free list")
-
-    void *ptr = p->queue->data;
-    void *next = p->queue->next;
-    free(p->queue);
-    p->queue = next;
-    return ptr;
-}
-
-void thread_list_wait_queue_append(struct thread_list *p, void *data) {
-    struct wait_node *next = p->queue;
-    if (next != NULL) {
-        while (next->next != NULL) {
-            next = next->next;
-        }
-        next = next->next;
-    }
-    next = malloc(sizeof(struct wait_node));
-    if (next == NULL)
-        ERR("malloc failed")
-    next->data = data;
-    next->next = NULL;
-}
-
 void thread_list_schedule_work(struct thread_list *p, void *task) {
     for (int i = 0; i < p-> len; i++) {
         if (p->queue == NULL && task == NULL)
@@ -151,7 +125,7 @@ void thread_list_schedule_work(struct thread_list *p, void *task) {
 
             // priorize elements already in the queue
             if (p->queue != NULL) {
-                void *queued_task = thread_list_wait_queue_pop(p);
+                void *queued_task = list_pop(&p->queue);
                 q.task = queued_task;
                 send_query(p->threads[i].socket, &q);
             } else {
@@ -163,7 +137,7 @@ void thread_list_schedule_work(struct thread_list *p, void *task) {
     }
     // no thread available
     if (task)
-        thread_list_wait_queue_append(p, task);
+        list_append(&p->queue, task);
 }
 
 void thread_list_stop(struct thread_list *p) {
@@ -177,4 +151,33 @@ void thread_list_destroy(struct thread_list *p) {
         thread_destroy(&p->threads[i]);
     }
     free(p->threads);
+}
+
+void kill_worker(int _) {
+    pthread_exit(0);
+}
+
+void* threadpool_handler(void *val) {
+    // destroy the thread upon reception of the SIGUSR1 signal
+    struct sigaction sig;
+    sig.sa_handler = kill_worker;
+    sigaction(SIGUSR1, &sig, NULL);
+
+    struct thread *th = (struct thread*)val;
+    while(1) {
+        struct query msg;
+        recv_query(th->remote_socket, &msg);
+        if (msg.state == Stop) {
+            enum Answer ans = Stopped;
+            send_answer(th->remote_socket, &ans);
+            close(th->remote_socket);
+            return 0;
+        }
+        if (msg.state == RunTask) {
+            webserv(msg.task);
+            enum Answer ans = TaskResult;
+            send_answer(th->remote_socket, &ans);
+        }
+    }
+    return 0;
 }
