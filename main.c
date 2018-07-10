@@ -14,7 +14,9 @@ void* handler(void *val) {
             return 0;
         }
         if (msg.state == RunTask) {
-            webserv(*(int*)msg.task);
+            webserv(msg.task);
+            enum Answer ans = TaskResult;
+            send_answer(th->remote_socket, &ans);
         }
     }
     return 0;
@@ -27,7 +29,7 @@ int main(int argc, char* argv[]) {
 
     struct sockaddr_in web_addr;
     web_addr.sin_family = AF_INET;
-    web_addr.sin_port = 8080;
+    web_addr.sin_port = htons(8080);
     web_addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(web_socket, (struct sockaddr*)&web_addr, sizeof(struct sockaddr_in)))
         ERR("bind failed")
@@ -63,10 +65,17 @@ int main(int argc, char* argv[]) {
                     running--;
                 } else if (r == TaskResult) {
                     th->available = 1;
+                    thread_list_schedule_work(&threads, NULL);
                 }
             } else {
                 // This is the web server socket
+                struct sockaddr_in remote_addr;
+                socklen_t remote_addr_len;
+                long sock = accept(web_socket, (struct sockaddr*)&remote_addr, &remote_addr_len);
+                if (sock == 0)
+                    ERR("accept failed")
 
+                thread_list_schedule_work(&threads, (void*)sock);
             }
         }
     }

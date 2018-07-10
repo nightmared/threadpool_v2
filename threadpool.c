@@ -1,5 +1,6 @@
 #include "threadpool.h"
 
+
 struct thread thread_new() {
     int sockets[2];
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets))
@@ -140,6 +141,9 @@ void thread_list_wait_queue_append(struct thread_list *p, void *data) {
 
 void thread_list_schedule_work(struct thread_list *p, void *task) {
     for (int i = 0; i < p-> len; i++) {
+        if (p->queue == NULL && task == NULL)
+            return;
+
         if (p->threads[i].available) {
             p->threads[i].available = 0;
             struct query q;
@@ -149,16 +153,17 @@ void thread_list_schedule_work(struct thread_list *p, void *task) {
             if (p->queue != NULL) {
                 void *queued_task = thread_list_wait_queue_pop(p);
                 q.task = queued_task;
+                send_query(p->threads[i].socket, &q);
             } else {
                 q.task = task;
+                send_query(p->threads[i].socket, &q);
+                task = NULL;
             }
-
-            send_query(p->threads[i].socket, &q);
-            return;
         }
     }
     // no thread available
-    thread_list_wait_queue_append(p, task);
+    if (task)
+        thread_list_wait_queue_append(p, task);
 }
 
 void thread_list_stop(struct thread_list *p) {

@@ -2,7 +2,9 @@
 #define WEBSERV_H_FILE
 
 #include <netinet/in.h>
+#include <stdio.h>
+#include <unistd.h>
 
-void webserv(int sock);
+void webserv(void* sock);
 
 #endif //WEBSERV_H_FILE

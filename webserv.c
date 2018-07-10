@@ -1,5 +1,6 @@
 #include "webserv.h"
 
-void webserv(int sock) {
-
+void webserv(void* s) {
+    int sock = (int)(long)s;
+    close(sock);
 }
