@@ -3,6 +3,12 @@
 
 #define NUMBER_THREADS 4
 
+struct web_server {
+    int web_socket;
+    int polling_fd;
+    struct thread_list threads;
+};
+
 static int web_socket, epfd;
 static struct thread_list threads;
 
@@ -14,6 +20,9 @@ void cleanup_handler(int _) {
 }
 
 int main(int argc, char* argv[]) {
+    // We MUST call this before starting any other thread to prevent any risk of race condition
+    prepare_parser();
+
     web_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (web_socket == 0)
         ERR("Couldn't allocate a socket")
@@ -46,8 +55,9 @@ int main(int argc, char* argv[]) {
         ERR("epoll_ctl failed")
 
     int running = NUMBER_THREADS;
+    // an event per thread plus an avent for the listening socket
     struct epoll_event events[NUMBER_THREADS+1];
-    while (running != 0) {
+    while (running) {
         int res = epoll_wait(epfd, events, NUMBER_THREADS+1, -1);
         if (res == -1)
             ERR("epoll_wait failed")
