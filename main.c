@@ -16,12 +16,13 @@ void cleanup_handler(int _) {
     thread_list_destroy(&threads);
     close(epfd);
     close(web_socket);
+    parser_cleanup();
     exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char* argv[]) {
     // We MUST call this before starting any other thread to prevent any risk of race condition
-    prepare_parser();
+    parser_prepare();
 
     web_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (web_socket == 0)

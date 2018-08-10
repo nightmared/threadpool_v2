@@ -52,7 +52,7 @@ struct thread_list {
     uint32_t len;
     struct thread* threads;
     void *(*fun) (void *);
-    struct list_node *queue;
+    struct list queue;
 };
 
 struct thread_list thread_list_new(uint32_t len, void *(*fun) (void *));

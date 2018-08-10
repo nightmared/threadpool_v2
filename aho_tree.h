@@ -22,6 +22,7 @@ struct match {
 };
 
 struct aho_tree tree_new();
+void tree_free(struct aho_tree *t);
 struct match tree_match(struct aho_tree *t, char *buf);
 void tree_add(struct aho_tree *t, char* buf, uint64_t val);
 

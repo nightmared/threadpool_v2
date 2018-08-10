@@ -72,12 +72,12 @@ struct thread_list thread_list_new(uint32_t len, void *(*fun) (void *)) {
     res.len = len;
     res.threads = data;
     res.fun = fun;
-    res.queue = NULL;
+    res.queue = list_new(len*2, sizeof(void*));
 
     for (uint32_t i = 0; i < len; i++) {
         res.threads[i] = thread_new();
         thread_run(&res.threads[i], fun);
-        char thread_name[15];
+        char thread_name[25];
         snprintf((char*)&thread_name, 15, "pool-%i", i);
         pthread_setname_np(res.threads[i].fd, (char*)&thread_name);
     }
@@ -92,6 +92,9 @@ void thread_list_respawn(struct thread_list *p, uint32_t pos) {
     thread_destroy(&p->threads[pos]);
     p->threads[pos] = thread_new();
     thread_run(&p->threads[pos], p->fun);
+    char thread_name[25];
+    snprintf((char*)&thread_name, 25, "pool-respawned-%i", pos);
+    pthread_setname_np(p->threads[pos].fd, (char*)&thread_name);
 }
 
 int thread_list_create_epoll_queue(struct thread_list *p) {
@@ -114,8 +117,8 @@ int thread_list_create_epoll_queue(struct thread_list *p) {
 }
 
 void thread_list_schedule_work(struct thread_list *p, void *task) {
-    for (int i = 0; i < p-> len; i++) {
-        if (p->queue == NULL && task == NULL)
+    for (int i = 0; i < p->len; i++) {
+        if (p->queue.len == 0 && task == NULL)
             return;
 
         if (p->threads[i].available) {
@@ -124,8 +127,9 @@ void thread_list_schedule_work(struct thread_list *p, void *task) {
             q.state = RunTask;
 
             // priorize elements already in the queue
-            if (p->queue != NULL) {
-                void *queued_task = list_pop(&p->queue);
+            if (p->queue.len > 0) {
+                void *queued_task = *(void**)list_access(&p->queue, p->queue.len-1);
+                list_pop(&p->queue);
                 q.task = queued_task;
                 send_query(p->threads[i].socket, &q);
             } else {

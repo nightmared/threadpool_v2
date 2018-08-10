@@ -5,14 +5,19 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-struct list_node {
+struct list {
     void *data;
-    struct list_node* next;
+    size_t data_size;
+    size_t len;
+    size_t allocated_size;
 };
 
-void* list_pop(struct list_node **head);
-void list_append(struct list_node **head, void *data);
-void* list_access(struct list_node *head, size_t pos);
+struct list list_new(size_t allocated_slots, size_t data_size);
+void list_pop(struct list *lst);
+void list_append(struct list *lst, void *data);
+void* list_access(struct list *lst, size_t num);
+void list_free(struct list *lst);
 
 #endif //LIST_H_FILE

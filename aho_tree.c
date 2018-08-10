@@ -68,3 +68,15 @@ void tree_add(struct aho_tree *t, char* buf, uint64_t val) {
     }
     tree_insert_children_unconditionally(common_part.node, &buf[common_part.length_matched], val);
 }
+
+void tree_free(struct aho_tree *t) {
+    if (t->children_num == 0)
+        return;
+
+    for (uint8_t child = 0; child < t->children_num; child++) {
+        tree_free(&t->children[child]);
+    }
+
+    free(t->children);
+    t->children_num = 0;
+}

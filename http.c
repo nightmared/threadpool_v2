@@ -7,7 +7,7 @@ return val;
 
 static struct aho_tree verb_match_tree;
 
-void prepare_parser() {
+void parser_prepare() {
     verb_match_tree = tree_new();
     tree_add(&verb_match_tree, "GET", GET);
     tree_add(&verb_match_tree, "POST", POST);
@@ -19,9 +19,8 @@ void prepare_parser() {
     tree_add(&verb_match_tree, "CONNECT", CONNECT);
 }
 
-enum verb get_verb(char* uri) {
-    struct match res = tree_match(&verb_match_tree, uri);
-    return res.node->data;
+void parser_cleanup() {
+    tree_free(&verb_match_tree);
 }
 
 int contain(char* src, char* cmp, size_t pos) {
@@ -32,8 +31,7 @@ int contain(char* src, char* cmp, size_t pos) {
         return 0;
 
     size_t counter = 0;
-    size_t maxlen = MIN(cmplen, srclen-pos);
-    while (counter < maxlen && src[pos+counter] == cmp[counter])
+    while (counter < cmplen && src[pos+counter] == cmp[counter])
         counter++;
 
     if (counter == cmplen)
@@ -41,29 +39,75 @@ int contain(char* src, char* cmp, size_t pos) {
     return 0;
 }
 
-char* get_url(char* uri) {
-    size_t len = strlen(uri);
+// return header_length, including CRLF
+size_t get_header_length(char *buf) {
     size_t pos = 0;
-    // ignore any CLRF before the Request-Line, per the specification (https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html)
-    while (pos < len && (uri[pos] == '\n' || uri[pos] == '\r'))
+    while (buf[pos] != '\0') {
+        if (buf[pos] == '\r' && buf[pos+1] == '\n')
+            break;
         pos++;
-    // ignore the HTTP verb
-    while (pos < len && uri[pos] != ' ')
-        pos++;
-    // ignore the space after the HTTP verb
-    pos++;
-
-    if (contain(uri, " HTTP/1.", len-9)) {
-        size_t copy_len = len-pos-8;
-        char* res = malloc(copy_len);
-        if (!res)
-            ERR("malloc failed")
-        strncpy(res, &uri[pos], copy_len-1);
-        res[copy_len-1] = 0;
-        return res;
-    } else {
-        return NULL;
     }
+    // include CRLF size
+    return pos+2;
 }
 
+void http_parse(char *buf, size_t len, int (*cb)(struct http_query*)) {
+    struct http_query q = {0};
 
+    size_t pos = 0;
+
+    // ignore any CLRF before the Request-Line, per the specification (https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html)
+    while (pos < len && (buf[pos] == '\n' || buf[pos] == '\r'))
+        pos++;
+
+    // match the http verb
+    struct match verb_res = tree_match(&verb_match_tree, buf+pos);
+    q.verb = verb_res.node->data;
+    // what's the point of going any further if we can't event match the verb ?
+    if (q.verb == INVALID)
+        return;
+    // ignore the space after the HTTP verb
+    pos += verb_res.length_matched+1;
+
+    // Let's get the Request-URI size, it's 'req_len-11'
+    size_t req_len = get_header_length(buf+pos);
+    // No Request-URI !? Let's drop that packet
+    if (req_len < 12)
+        return;
+
+    // let's copy Request-URI to a new buffer if this is a true HTTP Request
+    if (contain(buf+pos, " HTTP/1.1", req_len-11)) {
+        // Let's not forget the NULL byte
+        q.url = malloc(req_len-10);
+        if (!q.url)
+            ERR("malloc failed")
+        strncpy(q.url, buf+pos, req_len-11);
+        q.url[req_len-11] = '\0';
+    }
+    pos += req_len;
+
+    q.headers = list_new(8, sizeof(char*));
+    // let's match all those freaking headers
+    size_t offset;
+    while ((offset = get_header_length(buf+pos)) != 2) {
+        char *copy_buf = malloc(offset-1);
+        if (!copy_buf)
+            ERR("malloc failed !")
+        list_append(&q.headers, copy_buf);
+        pos += offset;
+    }
+
+    cb(&q);
+    http_query_destroy(&q);
+}
+
+void http_query_destroy(struct http_query *q) {
+    while (q->headers.len > 0) {
+        free(*(void**)list_access(&q->headers, q->headers.len-1));
+        list_pop(&q->headers);
+    }
+    list_free(&q->headers);
+
+    if(q->url)
+       free(q->url);
+}

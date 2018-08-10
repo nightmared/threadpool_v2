@@ -16,9 +16,16 @@ enum verb {
     CONNECT
 };
 
+struct http_query {
+    enum verb verb;
+    char *url;
+    struct list headers;
+};
+
 // MANDATORY to call !
-void prepare_parser();
-enum verb get_verb(char* uri);
-char* get_url(char* uri);
+void parser_prepare();
+void http_parse(char *buf, size_t len, int (*cb)(struct http_query*));
+void http_query_destroy(struct http_query *q);
+void parser_cleanup();
 
 #endif //HTTP_H_FILE
