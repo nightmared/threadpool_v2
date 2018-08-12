@@ -30,8 +30,8 @@ void list_append(struct list *lst, void *data) {
         if (!lst->data)
             ERR("realloc failed")
     }
+    memcpy(lst->data+lst->len*lst->data_size, data, lst->data_size);
     lst->len += 1;
-    memcpy(lst->data+(lst->len-1)*lst->data_size, data, lst->data_size);
 }
 
 void* list_access(struct list *lst, size_t num) {

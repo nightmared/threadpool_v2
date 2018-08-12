@@ -3,7 +3,7 @@
 
 #define MIN(a, b) (a > b ? b : a)
 #define COMPARE_RETURN(str, val, strval) if (strncmp(str, strval, strlen(strval)) == 0) \
-return val;
+    return val;
 
 static struct aho_tree verb_match_tree;
 
@@ -89,12 +89,25 @@ void http_parse(char *buf, size_t len, int (*cb)(struct http_query*)) {
     q.headers = list_new(8, sizeof(char*));
     // let's match all those freaking headers
     size_t offset;
+    // "offset == 2" => matched the second \r\n, time to stop matching headers, we're at the body now ;)
     while ((offset = get_header_length(buf+pos)) != 2) {
         char *copy_buf = malloc(offset-1);
         if (!copy_buf)
             ERR("malloc failed !")
         list_append(&q.headers, copy_buf);
         pos += offset;
+    }
+    pos += 2;
+
+    // no body at all !? Well, let's continue anyway
+    if (len <= pos) {
+        q.body = NULL;
+    } else {
+        q.body = malloc(len-pos+1);
+        if (!q.body)
+            ERR("malloc failed")
+        memcpy(q.body, buf+pos, len-pos);
+        q.body[len-pos] = '\0';
     }
 
     cb(&q);
@@ -110,4 +123,7 @@ void http_query_destroy(struct http_query *q) {
 
     if(q->url)
        free(q->url);
+
+    if(q->body)
+       free(q->body);
 }

@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
         if (connect(client_socket, (struct sockaddr*)&web_addr, sizeof(struct sockaddr_in)))
             ERR("connect failed")
 
-        snprintf(buf, 255, "\r\n\r\nGET /%i HTTP/1.1\r\n\r\n", i);
+        snprintf(buf, 255, "\r\n\r\nGET /%i HTTP/1.1\r\n\r\nhi, what's up ?", i);
         send(client_socket, buf, sizeof(buf), 0);
 
         close(client_socket);

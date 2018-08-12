@@ -5,6 +5,7 @@
 #include "list.h"
 
 enum verb {
+    // The INVALID state MUST have the value 0 to match the value returned by default by tree_match
     INVALID = 0,
     GET,
     POST,
@@ -19,6 +20,7 @@ enum verb {
 struct http_query {
     enum verb verb;
     char *url;
+    char *body;
     struct list headers;
 };
 

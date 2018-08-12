@@ -76,9 +76,7 @@ int main(int argc, char* argv[]) {
                 }
             } else {
                 // This is the web server socket
-                struct sockaddr_in remote_addr;
-                socklen_t remote_addr_len;
-                long sock = accept(web_socket, (struct sockaddr*)&remote_addr, &remote_addr_len);
+                long sock = accept(web_socket, NULL, NULL);
                 if (sock == 0)
                     ERR("accept failed")
 

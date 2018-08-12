@@ -141,7 +141,7 @@ void thread_list_schedule_work(struct thread_list *p, void *task) {
     }
     // no thread available
     if (task)
-        list_append(&p->queue, task);
+        list_append(&p->queue, &task);
 }
 
 void thread_list_stop(struct thread_list *p) {
