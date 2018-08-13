@@ -1,9 +1,12 @@
 #include "webserv.h"
 
-int on_parsed(struct http_query* q) {
-    // extract method & URL
-    printf("%s\n", q->url);
-    printf("%s\n", q->body);
+int on_parsed(struct http_query* q, void *additional_data) {
+    int sock = (int)(long)additional_data;
+
+	char* res = http_response_make(200, NULL, NULL, 0);
+	send(sock, res, strlen(res), 0);
+	free(res);
+
     return 0;
 }
 
@@ -30,7 +33,7 @@ void webserv(void* s) {
         return;
     }
 
-    http_parse(buf, count*len+recvd, on_parsed);
+    http_parse(buf, count*len+recvd, on_parsed, s);
     free(buf);
 
     close(sock);

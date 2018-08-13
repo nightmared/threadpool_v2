@@ -52,6 +52,7 @@ struct thread_list {
     uint32_t len;
     struct thread* threads;
     void *(*fun) (void *);
+    // sadly, due to the structure of the list structure, this is LIFO ;(
     struct list queue;
 };
 

@@ -51,7 +51,7 @@ size_t get_header_length(char *buf) {
     return pos+2;
 }
 
-void http_parse(char *buf, size_t len, int (*cb)(struct http_query*)) {
+void http_parse(char *buf, size_t len, int (*cb)(struct http_query*, void*), void* additional_data) {
     struct http_query q = {0};
 
     size_t pos = 0;
@@ -94,7 +94,10 @@ void http_parse(char *buf, size_t len, int (*cb)(struct http_query*)) {
         char *copy_buf = malloc(offset-1);
         if (!copy_buf)
             ERR("malloc failed !")
-        list_append(&q.headers, copy_buf);
+
+        memcpy(copy_buf, buf+pos, offset-2);
+        copy_buf[offset-2] = '\0';
+        list_append(&q.headers, &copy_buf);
         pos += offset;
     }
     pos += 2;
@@ -110,7 +113,7 @@ void http_parse(char *buf, size_t len, int (*cb)(struct http_query*)) {
         q.body[len-pos] = '\0';
     }
 
-    cb(&q);
+    cb(&q, additional_data);
     http_query_destroy(&q);
 }
 
@@ -126,4 +129,40 @@ void http_query_destroy(struct http_query *q) {
 
     if(q->body)
        free(q->body);
+}
+
+char* http_response_make(int code, struct list *headers, char* content, size_t content_len) {
+	assert(code < 1000 && code > 99);
+	// measure total headers length to compute the size to be allocated
+	size_t headers_len = 0;
+	if (headers)
+		for (size_t i = 0; i < headers->len; i++)
+			headers_len += strlen(*(char**)list_access(headers, i));
+
+	// 17 because of the HTTP version + status code + 2 spaces + 2 CLRF
+	char reason_phrase[] = "lol";
+	size_t status_len = 17+strlen(reason_phrase);
+	size_t total_len = content_len+status_len+headers_len;
+
+	char* res = malloc(total_len+1);
+	if (!res)
+		ERR("malloc failed !")
+	// better be safe than sorry
+	res[total_len] = '\0';
+
+    // What about using real "Reason Phrase" ? How to tell this... hmm, I don't
+	// care as, per the specification, «The reason phrases listed here [...]
+	// MAY be replaced by local equivalents without affecting the protocol.»
+	// (https://www.w3.org/Protocols/rfc2616/rfc2616-sec6.html)
+	snprintf(res, status_len, "HTTP/1.1 %i NA \r\n", code);
+	size_t pos = status_len;
+	if (headers) {
+		for (size_t i = 0; i < headers->len; i++) {
+			size_t tmp_len = strlen(*(char**)list_access(headers, i));
+			memcpy(res+pos, *(char**)list_access(headers, i), tmp_len);
+			pos += tmp_len;
+		}
+	}
+	memcpy(res+pos, content, content_len);
+	return res;
 }

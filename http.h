@@ -24,10 +24,11 @@ struct http_query {
     struct list headers;
 };
 
-// MANDATORY to call !
+// MANDATORY to call ! (otherwise even basic things like HTTP-verb matching will fail)
 void parser_prepare();
-void http_parse(char *buf, size_t len, int (*cb)(struct http_query*));
+void http_parse(char *buf, size_t len, int (*cb)(struct http_query*, void*), void* additional_data);
 void http_query_destroy(struct http_query *q);
+char* http_response_make(int code, struct list *headers, char* content, size_t content_len);
 void parser_cleanup();
 
 #endif //HTTP_H_FILE
